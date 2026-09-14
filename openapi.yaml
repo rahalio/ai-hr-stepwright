@@ -1,0 +1,1666 @@
+openapi: 3.0.3
+info:
+  title: Stepwright
+  version: 0.1.0
+  description: >-
+    Productivity settlement ledger for the virtual workforce. Stepwright measures work in
+    steps and labour hours per transaction against frozen baselines, holds automation
+    benefits as unrealised until a finance-owned realisation gate confirms them, captures
+    shadow capital funded from business-unit operating budgets, and enforces authority
+    limits and commitment logging for digital assistants that can commit the enterprise.
+  x-product-slug: ai-hr-stepwright
+  x-source: ai-in-hr/Accenture-Productivity-Emergence-AI-Workforce/
+servers:
+  - url: https://api.example.com
+tags:
+  - name: Processes
+    description: End-to-end processes and their step models
+  - name: Instrumentation
+    description: Step measurement ingestion and baseline management
+  - name: BenefitCases
+    description: Forecast benefit, invested capital, and unrealised benefit register
+  - name: Gates
+    description: Finance-owned benefit realisation gates
+  - name: Capital
+    description: Shadow capital capture and legacy run-cost ring-fencing
+  - name: Assistants
+    description: Assistant registry, authority limits, and segregation assertions
+  - name: Commitments
+    description: Assistant-initiated commitments, breaches, and reversals
+  - name: WorkforceImpact
+    description: Remaining work design, consultation, and contingent classification
+  - name: Reporting
+    description: Portfolio realisation and productivity reporting
+paths:
+  /v1/processes:
+    get:
+      operationId: listProcesses
+      tags: [Processes]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: function
+          in: query
+          schema:
+            type: string
+        - name: baselineState
+          in: query
+          schema:
+            type: string
+            enum: [unbaselined, measuring, frozen, stale]
+      responses:
+        "200":
+          description: Processes page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListEnvelopeProcess"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createProcess
+      tags: [Processes]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProcessCreate"
+      responses:
+        "201":
+          description: Process registered for instrumentation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeProcess"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+  /v1/processes/{processId}/steps:
+    parameters:
+      - $ref: "#/components/parameters/ProcessId"
+    put:
+      operationId: replaceProcessSteps
+      tags: [Processes]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProcessStepSet"
+      responses:
+        "200":
+          description: Step model version created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeProcessStepSet"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/processes/{processId}/measurements:
+    parameters:
+      - $ref: "#/components/parameters/ProcessId"
+    post:
+      operationId: ingestStepMeasurements
+      tags: [Instrumentation]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StepMeasurementBatch"
+      responses:
+        "202":
+          description: Measurements accepted for aggregation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeIngestAck"
+    get:
+      operationId: getProcessMeasurementSeries
+      tags: [Instrumentation]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Steps and hours per transaction series at process level
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeMeasurementSeries"
+  /v1/processes/{processId}/baseline:
+    parameters:
+      - $ref: "#/components/parameters/ProcessId"
+    post:
+      operationId: freezeBaseline
+      tags: [Instrumentation]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BaselineFreezeRequest"
+      responses:
+        "201":
+          description: Baseline frozen and dated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeBaseline"
+        "409":
+          description: A frozen baseline already exists for this period
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /v1/deployments:
+    get:
+      operationId: listDeployments
+      tags: [BenefitCases]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: kind
+          in: query
+          schema:
+            type: string
+            enum: [automation, assistant, redesign, autonomous_asset]
+        - name: gateState
+          in: query
+          schema:
+            type: string
+            enum: [pre_gate, measuring, passed, deferred, failed]
+      responses:
+        "200":
+          description: Deployments page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListEnvelopeDeployment"
+    post:
+      operationId: registerDeployment
+      tags: [BenefitCases]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeploymentCreate"
+      responses:
+        "201":
+          description: Deployment registered against a process and baseline
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeDeployment"
+  /v1/deployments/{deploymentId}/benefit-case:
+    parameters:
+      - $ref: "#/components/parameters/DeploymentId"
+    put:
+      operationId: submitBenefitCase
+      tags: [BenefitCases]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BenefitCaseUpsert"
+      responses:
+        "200":
+          description: Benefit case recorded with capital and workforce consequence
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeBenefitCase"
+        "422":
+          description: Benefit case rejected, shadow capital or workforce impact missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /v1/unrealised-benefits:
+    get:
+      operationId: listUnrealisedBenefits
+      tags: [BenefitCases]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: period
+          in: query
+          schema:
+            type: string
+            example: 2026-Q3
+      responses:
+        "200":
+          description: Forecast benefit held unrealised pending gate decisions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListEnvelopeUnrealisedBenefit"
+  /v1/deployments/{deploymentId}/gate:
+    parameters:
+      - $ref: "#/components/parameters/DeploymentId"
+    post:
+      operationId: decideRealisationGate
+      tags: [Gates]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GateDecisionRequest"
+      responses:
+        "200":
+          description: Gate decision recorded, benefit released deferred or failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeGateDecision"
+        "409":
+          description: Measurement window has not completed for this deployment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+    get:
+      operationId: getRealisationGate
+      tags: [Gates]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Gate state with measured against forecast comparison
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeRealisationGate"
+  /v1/capital-records:
+    post:
+      operationId: recordCapital
+      tags: [Capital]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CapitalRecordCreate"
+      responses:
+        "201":
+          description: Capital recorded, including shadow capital from operating budgets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeCapitalRecord"
+  /v1/ringfence:
+    get:
+      operationId: getRingfenceStatus
+      tags: [Capital]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Legacy run-cost versus new capability spend against glide path
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeRingfenceBudget"
+  /v1/assistants:
+    get:
+      operationId: listAssistants
+      tags: [Assistants]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [registered, active, halted, retired]
+      responses:
+        "200":
+          description: Assistants page with authority state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListEnvelopeAssistant"
+    post:
+      operationId: registerAssistant
+      tags: [Assistants]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssistantCreate"
+      responses:
+        "201":
+          description: Assistant registered in report-only state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeAssistant"
+  /v1/assistants/{assistantId}/authority-limits:
+    parameters:
+      - $ref: "#/components/parameters/AssistantId"
+    put:
+      operationId: grantAuthorityLimit
+      tags: [Assistants]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthorityLimitSet"
+      responses:
+        "200":
+          description: Commitment authority granted with reversibility and segregation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeAuthorityLimitSet"
+        "422":
+          description: Segregation of duties assertion missing or conflicting
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /v1/commitments:
+    post:
+      operationId: logCommitment
+      tags: [Commitments]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommitmentEventCreate"
+      responses:
+        "201":
+          description: Commitment logged within the assistant authority limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeCommitmentEvent"
+        "409":
+          description: Commitment exceeds authority limit, assistant halted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+    get:
+      operationId: listCommitments
+      tags: [Commitments]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: assistantId
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [committed, reversed, breach_halted, under_review]
+      responses:
+        "200":
+          description: Append-only commitment log page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListEnvelopeCommitmentEvent"
+  /v1/commitments/{commitmentId}/reversal:
+    parameters:
+      - $ref: "#/components/parameters/CommitmentId"
+    post:
+      operationId: reverseCommitment
+      tags: [Commitments]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                reversedByRef:
+                  type: string
+      responses:
+        "200":
+          description: Commitment reversal recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeReversalRecord"
+  /v1/deployments/{deploymentId}/remaining-work:
+    parameters:
+      - $ref: "#/components/parameters/DeploymentId"
+    put:
+      operationId: describeRemainingWork
+      tags: [WorkforceImpact]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RemainingWorkProfile"
+      responses:
+        "200":
+          description: Remaining human work profile recorded for the redesigned process
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeRemainingWorkProfile"
+  /v1/deployments/{deploymentId}/workforce-impact:
+    parameters:
+      - $ref: "#/components/parameters/DeploymentId"
+    post:
+      operationId: raiseWorkforceImpact
+      tags: [WorkforceImpact]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkforceImpactCreate"
+      responses:
+        "201":
+          description: Impact recorded and consultation obligation raised where required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeWorkforceImpact"
+  /v1/contingent-assessments:
+    post:
+      operationId: assessContingentClassification
+      tags: [WorkforceImpact]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContingentClassificationAssessment"
+      responses:
+        "201":
+          description: Classification and co-employment assessment recorded before work moves
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeContingentClassificationAssessment"
+  /v1/reports/portfolio-realisation:
+    get:
+      operationId: getPortfolioRealisationReport
+      tags: [Reporting]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Realised against forecast benefit across the portfolio, failures included
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopePortfolioRealisationReport"
+  /v1/reports/productivity-index:
+    get:
+      operationId: getProductivityIndex
+      tags: [Reporting]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: processId
+          in: query
+          schema:
+            type: string
+        - name: period
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Steps and hours per transaction against baseline and invested capital
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataEnvelopeProductivityIndex"
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    ProcessId:
+      name: processId
+      in: path
+      required: true
+      schema:
+        type: string
+    DeploymentId:
+      name: deploymentId
+      in: path
+      required: true
+      schema:
+        type: string
+    AssistantId:
+      name: assistantId
+      in: path
+      required: true
+      schema:
+        type: string
+    CommitmentId:
+      name: commitmentId
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    UnprocessableEntity:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    ResponseMeta:
+      type: object
+      required: [requestId, timestamp]
+      properties:
+        requestId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+    Money:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount:
+          type: number
+          format: double
+        currency:
+          type: string
+          example: USD
+    Process:
+      type: object
+      required: [id, name, function, baselineState]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          example: Order to cash credit review
+        function:
+          type: string
+        ownerRef:
+          type: string
+        annualTransactionVolume:
+          type: integer
+        baselineState:
+          type: string
+          enum: [unbaselined, measuring, frozen, stale]
+        occupationalFamilies:
+          type: array
+          items:
+            type: string
+            enum: [analyst, clerk, sales_or_service_representative, driver, technician, manager]
+    ProcessCreate:
+      type: object
+      required: [name, function]
+      properties:
+        name:
+          type: string
+        function:
+          type: string
+        ownerRef:
+          type: string
+        annualTransactionVolume:
+          type: integer
+        occupationalFamilies:
+          type: array
+          items:
+            type: string
+    ProcessStep:
+      type: object
+      required: [id, sequence, name, actor, labourClass]
+      properties:
+        id:
+          type: string
+        sequence:
+          type: integer
+        name:
+          type: string
+        actor:
+          type: string
+          enum: [human, automation, assistant, autonomous_asset, external_party]
+        systemOfExecution:
+          type: string
+        labourClass:
+          type: string
+          enum: [analyst, clerk, sales_or_service_representative, specialist, manager, none]
+        meanMinutes:
+          type: number
+          format: float
+        reworkStep:
+          type: boolean
+        reconciliationStep:
+          type: boolean
+        eliminationCandidate:
+          type: boolean
+    ProcessStepSet:
+      type: object
+      required: [processId, steps, effectiveFrom]
+      properties:
+        processId:
+          type: string
+        version:
+          type: integer
+        effectiveFrom:
+          type: string
+          format: date
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProcessStep"
+    StepMeasurement:
+      type: object
+      required: [stepId, period, transactions, totalMinutes]
+      properties:
+        stepId:
+          type: string
+        period:
+          type: string
+        transactions:
+          type: integer
+        totalMinutes:
+          type: number
+          format: double
+        touchCount:
+          type: integer
+        aggregationLevel:
+          type: string
+          enum: [process, team]
+          default: process
+          description: Individual level measurement is never accepted on this endpoint
+    StepMeasurementBatch:
+      type: object
+      required: [source, measurements]
+      properties:
+        source:
+          type: string
+          enum: [erp_event_log, process_mining, automation_platform, case_system, manual_study]
+        measurements:
+          type: array
+          items:
+            $ref: "#/components/schemas/StepMeasurement"
+    IngestAck:
+      type: object
+      required: [accepted, rejected]
+      properties:
+        accepted:
+          type: integer
+        rejected:
+          type: integer
+        rejectionReasons:
+          type: array
+          items:
+            type: string
+    MeasurementSeries:
+      type: object
+      required: [processId, points]
+      properties:
+        processId:
+          type: string
+        points:
+          type: array
+          items:
+            type: object
+            properties:
+              period:
+                type: string
+              stepsPerTransaction:
+                type: number
+                format: float
+              hoursPerTransaction:
+                type: number
+                format: float
+              reworkStepShare:
+                type: number
+                format: float
+        baselineStepsPerTransaction:
+          type: number
+          format: float
+        baselineHoursPerTransaction:
+          type: number
+          format: float
+    BaselineFreezeRequest:
+      type: object
+      required: [periodFrom, periodTo, approvedByRef]
+      properties:
+        periodFrom:
+          type: string
+          format: date
+        periodTo:
+          type: string
+          format: date
+        approvedByRef:
+          type: string
+        notes:
+          type: string
+    Baseline:
+      type: object
+      required: [id, processId, frozenOn, stepsPerTransaction, hoursPerTransaction]
+      properties:
+        id:
+          type: string
+        processId:
+          type: string
+        frozenOn:
+          type: string
+          format: date
+        periodFrom:
+          type: string
+          format: date
+        periodTo:
+          type: string
+          format: date
+        stepsPerTransaction:
+          type: number
+          format: float
+        hoursPerTransaction:
+          type: number
+          format: float
+        costPerTransaction:
+          $ref: "#/components/schemas/Money"
+        approvedByRef:
+          type: string
+    Deployment:
+      type: object
+      required: [id, processId, kind, status, goLiveDate]
+      properties:
+        id:
+          type: string
+        processId:
+          type: string
+        baselineId:
+          type: string
+        kind:
+          type: string
+          enum: [automation, assistant, redesign, autonomous_asset]
+        name:
+          type: string
+        status:
+          type: string
+          enum: [planned, live, throttled, retired]
+        goLiveDate:
+          type: string
+          format: date
+        measurementWindowWeeks:
+          type: integer
+        gateState:
+          type: string
+          enum: [pre_gate, measuring, passed, deferred, failed]
+    DeploymentCreate:
+      type: object
+      required: [processId, kind, name, goLiveDate]
+      properties:
+        processId:
+          type: string
+        baselineId:
+          type: string
+        kind:
+          type: string
+          enum: [automation, assistant, redesign, autonomous_asset]
+        name:
+          type: string
+        goLiveDate:
+          type: string
+          format: date
+        measurementWindowWeeks:
+          type: integer
+          default: 13
+    ShadowCapitalEntry:
+      type: object
+      required: [costCentre, amount, natureOfSpend]
+      properties:
+        costCentre:
+          type: string
+        amount:
+          $ref: "#/components/schemas/Money"
+        natureOfSpend:
+          type: string
+          enum: [contractor_effort, business_unit_licence, data_preparation, change_and_training, shadow_integration]
+        identifiedBy:
+          type: string
+        evidenceReference:
+          type: string
+    CapitalRecordCreate:
+      type: object
+      required: [deploymentId, capitalisedAmount, operatingAmount]
+      properties:
+        deploymentId:
+          type: string
+        capitalisedAmount:
+          $ref: "#/components/schemas/Money"
+        operatingAmount:
+          $ref: "#/components/schemas/Money"
+        shadowCapital:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShadowCapitalEntry"
+    CapitalRecord:
+      type: object
+      required: [id, deploymentId, totalInvested]
+      properties:
+        id:
+          type: string
+        deploymentId:
+          type: string
+        capitalisedAmount:
+          $ref: "#/components/schemas/Money"
+        operatingAmount:
+          $ref: "#/components/schemas/Money"
+        shadowCapital:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShadowCapitalEntry"
+        shadowCapitalTotal:
+          $ref: "#/components/schemas/Money"
+        totalInvested:
+          $ref: "#/components/schemas/Money"
+    BenefitCaseUpsert:
+      type: object
+      required: [forecastStepReductionPercent, forecastHoursReductionPercent, capital, workforceConsequence]
+      properties:
+        forecastStepReductionPercent:
+          type: number
+          format: float
+        forecastHoursReductionPercent:
+          type: number
+          format: float
+        forecastAnnualBenefit:
+          $ref: "#/components/schemas/Money"
+        capital:
+          $ref: "#/components/schemas/CapitalRecordCreate"
+        workforceConsequence:
+          type: string
+          enum: [none, role_change_only, redeployment, headcount_reduction, shift_to_contingent]
+        assumptions:
+          type: array
+          items:
+            type: string
+    BenefitCase:
+      type: object
+      required: [deploymentId, status, forecastStepReductionPercent, forecastHoursReductionPercent]
+      properties:
+        deploymentId:
+          type: string
+        status:
+          type: string
+          enum: [draft, approved, unrealised, realised, written_off]
+        forecastStepReductionPercent:
+          type: number
+          format: float
+        forecastHoursReductionPercent:
+          type: number
+          format: float
+        forecastAnnualBenefit:
+          $ref: "#/components/schemas/Money"
+        capital:
+          $ref: "#/components/schemas/CapitalRecord"
+        workforceConsequence:
+          type: string
+        restrictedUntilConsultationDischarged:
+          type: boolean
+        approvedByRef:
+          type: string
+    UnrealisedBenefit:
+      type: object
+      required: [deploymentId, period, amount, ageWeeks]
+      properties:
+        deploymentId:
+          type: string
+        period:
+          type: string
+        amount:
+          $ref: "#/components/schemas/Money"
+        ageWeeks:
+          type: integer
+        gateState:
+          type: string
+          enum: [pre_gate, measuring, passed, deferred, failed]
+    RealisationGate:
+      type: object
+      required: [deploymentId, windowOpenedOn, state]
+      properties:
+        deploymentId:
+          type: string
+        windowOpenedOn:
+          type: string
+          format: date
+        windowClosesOn:
+          type: string
+          format: date
+        state:
+          type: string
+          enum: [measuring, ready_for_decision, passed, deferred, failed]
+        measuredStepReductionPercent:
+          type: number
+          format: float
+        measuredHoursReductionPercent:
+          type: number
+          format: float
+        forecastStepReductionPercent:
+          type: number
+          format: float
+        sustainedPeriodsMet:
+          type: integer
+        sustainedPeriodsRequired:
+          type: integer
+    GateDecisionRequest:
+      type: object
+      required: [outcome, decidedByRef, rationale]
+      properties:
+        outcome:
+          type: string
+          enum: [pass, defer, fail]
+        decidedByRef:
+          type: string
+          description: Must hold a finance decision role, not a programme role
+        rationale:
+          type: string
+        benefitToBook:
+          $ref: "#/components/schemas/Money"
+        reMeasureWeeks:
+          type: integer
+    GateDecision:
+      type: object
+      required: [deploymentId, outcome, decidedOn, decidedByRef]
+      properties:
+        deploymentId:
+          type: string
+        outcome:
+          type: string
+          enum: [pass, defer, fail]
+        decidedOn:
+          type: string
+          format: date
+        decidedByRef:
+          type: string
+        rationale:
+          type: string
+        benefitBooked:
+          $ref: "#/components/schemas/Money"
+        benefitWrittenOff:
+          $ref: "#/components/schemas/Money"
+    RingfenceBudget:
+      type: object
+      required: [period, legacyRunCost, newCapabilitySpend]
+      properties:
+        period:
+          type: string
+        legacyRunCost:
+          $ref: "#/components/schemas/Money"
+        newCapabilitySpend:
+          $ref: "#/components/schemas/Money"
+        legacySharePercent:
+          type: number
+          format: float
+        glidePathTargetPercent:
+          type: number
+          format: float
+        variancePercent:
+          type: number
+          format: float
+        breach:
+          type: boolean
+    Assistant:
+      type: object
+      required: [id, name, status, ownerRef, commitmentAuthority]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        platform:
+          type: string
+        status:
+          type: string
+          enum: [registered, active, halted, retired]
+        ownerRef:
+          type: string
+          description: Named human accountable for the assistant
+        commitmentAuthority:
+          type: boolean
+        processIds:
+          type: array
+          items:
+            type: string
+        lastRecertifiedOn:
+          type: string
+          format: date
+    AssistantCreate:
+      type: object
+      required: [name, ownerRef]
+      properties:
+        name:
+          type: string
+        platform:
+          type: string
+        ownerRef:
+          type: string
+        processIds:
+          type: array
+          items:
+            type: string
+    AuthorityLimit:
+      type: object
+      required: [commitmentType, maxValuePerAction, reversibility]
+      properties:
+        commitmentType:
+          type: string
+          enum: [price_change, payment_release, credit_issue, order_commit, shift_change, contract_renewal]
+        maxValuePerAction:
+          $ref: "#/components/schemas/Money"
+        maxValuePerDay:
+          $ref: "#/components/schemas/Money"
+        reversibility:
+          type: string
+          enum: [auto_reversible, reversible_with_approval, irreversible_prohibited]
+        requiresHumanConfirmationAbove:
+          $ref: "#/components/schemas/Money"
+    SegregationAssertion:
+      type: object
+      required: [controlReference, assertedByRef, conflictFree]
+      properties:
+        controlReference:
+          type: string
+        assertedByRef:
+          type: string
+        conflictFree:
+          type: boolean
+        notes:
+          type: string
+    AuthorityLimitSet:
+      type: object
+      required: [assistantId, limits, segregationAssertion, recertifyEveryMonths]
+      properties:
+        assistantId:
+          type: string
+        limits:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuthorityLimit"
+        segregationAssertion:
+          $ref: "#/components/schemas/SegregationAssertion"
+        recertifyEveryMonths:
+          type: integer
+    CommitmentEventCreate:
+      type: object
+      required: [assistantId, commitmentType, value, instruction]
+      properties:
+        assistantId:
+          type: string
+        commitmentType:
+          type: string
+          enum: [price_change, payment_release, credit_issue, order_commit, shift_change, contract_renewal]
+        value:
+          $ref: "#/components/schemas/Money"
+        instruction:
+          type: string
+          description: The natural language or programmatic instruction that produced the action
+        targetReference:
+          type: string
+        processId:
+          type: string
+    CommitmentEvent:
+      type: object
+      required: [id, assistantId, commitmentType, value, committedAt, status]
+      properties:
+        id:
+          type: string
+        assistantId:
+          type: string
+        commitmentType:
+          type: string
+        value:
+          $ref: "#/components/schemas/Money"
+        instruction:
+          type: string
+        committedAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [committed, reversed, breach_halted, under_review]
+        limitTestedAgainst:
+          $ref: "#/components/schemas/AuthorityLimit"
+        humanConfirmationRef:
+          type: string
+    ReversalRecord:
+      type: object
+      required: [commitmentId, reversedAt, reason]
+      properties:
+        commitmentId:
+          type: string
+        reversedAt:
+          type: string
+          format: date-time
+        reason:
+          type: string
+        reversedByRef:
+          type: string
+        residualImpact:
+          $ref: "#/components/schemas/Money"
+    RemainingWorkProfile:
+      type: object
+      required: [deploymentId, remainingSteps, composition]
+      properties:
+        deploymentId:
+          type: string
+        remainingSteps:
+          type: integer
+        composition:
+          type: object
+          properties:
+            exceptionHandlingShare:
+              type: number
+              format: float
+            judgmentShare:
+              type: number
+              format: float
+            customerContactShare:
+              type: number
+              format: float
+            supervisionOfAutomationShare:
+              type: number
+              format: float
+        roleDesignNotes:
+          type: string
+        spanOfControlChange:
+          type: number
+          format: float
+    WorkforceImpactCreate:
+      type: object
+      required: [affectedPopulationCount, jurisdictions, consequence]
+      properties:
+        affectedPopulationCount:
+          type: integer
+        jurisdictions:
+          type: array
+          items:
+            type: string
+        consequence:
+          type: string
+          enum: [none, role_change_only, redeployment, headcount_reduction, shift_to_contingent]
+        affectedLabourClasses:
+          type: array
+          items:
+            type: string
+    WorkforceImpact:
+      type: object
+      required: [id, deploymentId, consequence, consultationRequired]
+      properties:
+        id:
+          type: string
+        deploymentId:
+          type: string
+        affectedPopulationCount:
+          type: integer
+        affectedLabourClasses:
+          type: array
+          items:
+            type: string
+        consequence:
+          type: string
+        consultationRequired:
+          type: boolean
+        consultationObligations:
+          type: array
+          items:
+            type: object
+            properties:
+              jurisdiction:
+                type: string
+              status:
+                type: string
+                enum: [not_required, raised, in_progress, discharged]
+              dueBefore:
+                type: string
+                format: date
+        deploymentBlockedUntilDischarged:
+          type: boolean
+    ContingentClassificationAssessment:
+      type: object
+      required: [deploymentId, arrangement, classification, coEmploymentRisk, assessedByRef]
+      properties:
+        id:
+          type: string
+        deploymentId:
+          type: string
+        arrangement:
+          type: string
+          enum: [agency_worker, independent_contractor, platform_worker, managed_service, offshore_captive]
+        jurisdiction:
+          type: string
+        classification:
+          type: string
+          enum: [self_employed, worker, employee, unresolved]
+        coEmploymentRisk:
+          type: string
+          enum: [low, medium, high]
+        controlFactors:
+          type: array
+          items:
+            type: string
+        assessedByRef:
+          type: string
+        assessedOn:
+          type: string
+          format: date
+    PortfolioRealisationReport:
+      type: object
+      required: [period, deploymentsAssessed]
+      properties:
+        period:
+          type: string
+        deploymentsAssessed:
+          type: integer
+        gatesPassed:
+          type: integer
+        gatesDeferred:
+          type: integer
+        gatesFailed:
+          type: integer
+        realisedShareOfForecast:
+          type: number
+          format: float
+        forecastBenefit:
+          $ref: "#/components/schemas/Money"
+        realisedBenefit:
+          $ref: "#/components/schemas/Money"
+        writtenOffBenefit:
+          $ref: "#/components/schemas/Money"
+        totalInvestedIncludingShadow:
+          $ref: "#/components/schemas/Money"
+    ProductivityIndex:
+      type: object
+      required: [scope, period]
+      properties:
+        scope:
+          type: string
+        period:
+          type: string
+        stepsPerTransaction:
+          type: number
+          format: float
+        baselineStepsPerTransaction:
+          type: number
+          format: float
+        stepReductionPercent:
+          type: number
+          format: float
+        hoursPerTransaction:
+          type: number
+          format: float
+        costPerWorkUnit:
+          $ref: "#/components/schemas/Money"
+        returnOnInvestedCapitalPercent:
+          type: number
+          format: float
+        reworkStepShare:
+          type: number
+          format: float
+        roleMixShift:
+          type: array
+          items:
+            type: object
+            properties:
+              labourClass:
+                type: string
+              sharePointChange:
+                type: number
+                format: float
+    DataEnvelopeProcess:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/Process"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeProcessStepSet:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/ProcessStepSet"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeIngestAck:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/IngestAck"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeMeasurementSeries:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/MeasurementSeries"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeBaseline:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/Baseline"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeDeployment:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/Deployment"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeBenefitCase:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/BenefitCase"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeRealisationGate:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/RealisationGate"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeGateDecision:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/GateDecision"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeCapitalRecord:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/CapitalRecord"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeRingfenceBudget:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/RingfenceBudget"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeAssistant:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/Assistant"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeAuthorityLimitSet:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/AuthorityLimitSet"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeCommitmentEvent:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/CommitmentEvent"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeReversalRecord:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/ReversalRecord"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeRemainingWorkProfile:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/RemainingWorkProfile"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeWorkforceImpact:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/WorkforceImpact"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeContingentClassificationAssessment:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/ContingentClassificationAssessment"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopePortfolioRealisationReport:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/PortfolioRealisationReport"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    DataEnvelopeProductivityIndex:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/ProductivityIndex"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    ListEnvelopeProcess:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Process"
+            nextCursor:
+              type: string
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    ListEnvelopeDeployment:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Deployment"
+            nextCursor:
+              type: string
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    ListEnvelopeUnrealisedBenefit:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/UnrealisedBenefit"
+            nextCursor:
+              type: string
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    ListEnvelopeAssistant:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Assistant"
+            nextCursor:
+              type: string
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+    ListEnvelopeCommitmentEvent:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/CommitmentEvent"
+            nextCursor:
+              type: string
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
